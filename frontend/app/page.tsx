@@ -5,7 +5,7 @@ export default function Home() {
     console.log("Sending test request...");
 
     try {
-      const res = await fetch("https://example.com/test", {
+      const res = await fetch("https://ingestion-service-523658399118.us-central1.run.app/ingest", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
