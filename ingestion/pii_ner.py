@@ -16,7 +16,7 @@ _nlp = None
 def get_nlp():
     global _nlp
     if _nlp is None:
-        _nlp = spacy.load("en_core_web_sm")
+        _nlp = spacy.load("en_core_web_lg")
     return _nlp
 
 def ner_detect_pii(text: str) -> List[str]:
