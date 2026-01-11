@@ -1,11 +1,9 @@
 import spacy
 from typing import List
 
-# 只用 spaCy 判断“有没有可能是人名”
-NER_TO_PII = {
-    "PERSON": "NAME",
-}
-
+# ===============================
+# spaCy lazy loader
+# ===============================
 _nlp = None
 
 def get_nlp():
@@ -15,19 +13,53 @@ def get_nlp():
     return _nlp
 
 
+# ===============================
+# NAME fallback triggers
+# ===============================
+NAME_TRIGGERS = {
+    "doctor", "dr", "patient",
+    "name", "names",
+    "mr", "ms", "mrs"
+}
+
+def should_try_name_fallback(text: str) -> bool:
+    """
+    Rule-based fallback trigger:
+    用于 spaCy 未检测到 PERSON，但句子形态明显在提名字的情况
+    """
+    lowered = text.lower()
+    return any(trigger in lowered for trigger in NAME_TRIGGERS)
+
+
+# ===============================
+# Main semantic detector
+# ===============================
 def ner_detect_pii(text: str) -> List[str]:
     """
-    Semantic detector:
-    - 只负责 NAME
-    - DATE / SSN 不在这里处理
+    Determine which PII types are worth attempting.
+
+    - NAME:
+        - spaCy detects PERSON
+        - OR fallback trigger fires
+    - DATE / SSN:
+        - Not handled here (always-on in regex layer)
     """
     detected = set()
 
-    nlp = get_nlp()
-    doc = nlp(text)
+    # ---------- spaCy semantic detection ----------
+    try:
+        nlp = get_nlp()
+        doc = nlp(text)
+        for ent in doc.ents:
+            if ent.label_ == "PERSON":
+                detected.add("NAME")
+                break
+    except Exception:
+        # spaCy failure should never block redaction
+        pass
 
-    for ent in doc.ents:
-        if ent.label_ in NER_TO_PII:
-            detected.add("NAME")
+    # ---------- fallback trigger ----------
+    if "NAME" not in detected and should_try_name_fallback(text):
+        detected.add("NAME")
 
     return list(detected)
