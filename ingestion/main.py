@@ -3,6 +3,7 @@ from pydantic import BaseModel
 import requests
 import uuid
 from fastapi.middleware.cors import CORSMiddleware
+from pii import redact_pii
 
 app = FastAPI(title="Ingestion Service")
 
@@ -71,3 +72,15 @@ def ingest(req: IngestRequest):
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+def process_input(payload: dict) -> dict:
+    raw_text = payload["content"]
+
+    redacted_text, entities = redact_pii(raw_text)
+
+    return {
+        "raw_text": raw_text,
+        "redacted_text": redacted_text,
+        "redaction_summary": entities,
+        "note": "phase1 pii redaction"
+    }
