@@ -33,20 +33,16 @@ class IngestResponse(BaseModel):
 # ---------- 核心处理逻辑（Feature 1 & 2 共用） ----------
 
 def process_input(payload: dict) -> dict:
-    """
-    这是未来 100% 复用的核心逻辑
-    HTTP / WebSocket 只负责把数据送进来
-    """
+    raw_text = payload["content"]
 
-    # 🚧 Phase 1：mock Intelligence Service
-    # 后面我们会替换成真实 Lambda
-    intelligence_response = {
-        "processed_text": payload["content"].upper(),
-        "note": "mock intelligence result"
+    redacted_text, entities = redact_pii(raw_text)
+
+    return {
+        "raw_text": raw_text,
+        "redacted_text": redacted_text,
+        "redaction_summary": entities,
+        "note": "phase1 pii redaction"
     }
-
-    return intelligence_response
-
 
 # ---------- HTTP Adapter（Feature 1 用） ----------
 
@@ -72,15 +68,3 @@ def ingest(req: IngestRequest):
 @app.get("/health")
 def health():
     return {"status": "ok"}
-
-def process_input(payload: dict) -> dict:
-    raw_text = payload["content"]
-
-    redacted_text, entities = redact_pii(raw_text)
-
-    return {
-        "raw_text": raw_text,
-        "redacted_text": redacted_text,
-        "redaction_summary": entities,
-        "note": "phase1 pii redaction"
-    }
