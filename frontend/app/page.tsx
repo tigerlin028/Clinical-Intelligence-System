@@ -1,6 +1,9 @@
 "use client";
+import { useState } from "react";
 
 export default function Home() {
+  const [response, setResponse] = useState<string | null>(null);
+
   const sendTest = async () => {
     console.log("Sending test request...");
 
@@ -16,7 +19,7 @@ export default function Home() {
       });
 
       const data = await res.json();
-      console.log("Response from backend:", data);
+      setResponse(data.result.processed_text);
     } catch (err) {
       console.error("Request failed:", err);
     }
@@ -27,6 +30,12 @@ export default function Home() {
       <h1>Clinical Ambient Intelligence</h1>
       <p>Phase 1 – Feature 1</p>
       <button onClick={sendTest}>Send Test</button>
+
+      {response && (
+        <div style={{ marginTop: "20px", fontWeight: "bold" }}>
+          Response: {response}
+        </div>
+      )}
     </main>
   );
 }
