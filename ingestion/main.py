@@ -4,6 +4,7 @@ import requests
 import uuid
 from fastapi.middleware.cors import CORSMiddleware
 from pii import redact_pii
+from pii_ner import ner_detect_pii
 
 app = FastAPI(title="Ingestion Service")
 
@@ -35,13 +36,20 @@ class IngestResponse(BaseModel):
 def process_input(payload: dict) -> dict:
     raw_text = payload["content"]
 
-    redacted_text, entities = redact_pii(raw_text)
+    detected_types = ner_detect_pii(raw_text)
+
+    redacted_text, entities = redact_pii(
+        raw_text,
+        allowed_types=detected_types
+    )
 
     return {
         "raw_text": raw_text,
         "redacted_text": redacted_text,
         "redaction_summary": entities,
-        "note": "phase1 pii redaction"
+        "detected_by": "spacy_ner",
+        "detected_entity_types": detected_types,
+        "note": "phase1 semantic-assisted pii redaction"
     }
 
 # ---------- HTTP Adapter（Feature 1 用） ----------
