@@ -19,6 +19,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # 下载 spaCy 模型（这一层也会被缓存）
 RUN python -m spacy download en_core_web_sm
 
+# 预下载 Whisper 模型到缓存（避免运行时下载）
+RUN python -c "from faster_whisper import WhisperModel; WhisperModel('tiny', device='cpu', compute_type='int8')"
+
 # 最后复制应用代码（只有代码变化时才重新构建这一层）
 COPY . .
 
