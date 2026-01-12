@@ -1,7 +1,7 @@
 // API 配置
 const API_ENDPOINTS = {
   development: "http://localhost:8000",
-  production: "https://ingestion-service-523658399118.us-central1.run.app", // 你的实际服务URL
+  production: "https://ingestion-service-ghib4spk7q-uc.a.run.app", // 更新的服务URL
   ngrok: "https://your-ngrok-url.ngrok.io" // 如果需要本地测试
 };
 

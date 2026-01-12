@@ -25,6 +25,7 @@ interface ProcessingResult {
   patient_id?: string;
   medical_records?: MedicalRecord[];
   extracted_patient_info?: Record<string, string>;
+  new_medical_info?: Array<{type: string; content: string; source: string}>;
   rag_error?: string;
 }
 
@@ -132,6 +133,22 @@ export default function AudioUploadDemo() {
               <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
                 <div className="text-yellow-800">
                   <strong>⚠ Patient Not Identified:</strong> {result.rag_error || "Unable to match patient information"}
+                </div>
+              </div>
+            )}
+
+            {/* New Medical Information Extracted */}
+            {result.new_medical_info && result.new_medical_info.length > 0 && (
+              <div className="bg-green-50 border border-green-200 rounded-md p-4">
+                <div className="text-green-800">
+                  <strong>✓ New Medical Information Extracted:</strong>
+                  <ul className="mt-2 list-disc list-inside">
+                    {result.new_medical_info.map((info, i) => (
+                      <li key={i} className="text-sm">
+                        <strong>{info.type}:</strong> {info.content}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               </div>
             )}

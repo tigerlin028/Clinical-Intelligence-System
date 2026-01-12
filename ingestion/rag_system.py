@@ -2,8 +2,8 @@
 import re
 from typing import Dict, List, Optional, Tuple
 from database import PatientDatabase, MedicalRecordsDatabase
-from datetime import datetime
 import logging
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -100,6 +100,7 @@ class RAGSystem:
             'patient_id': None,
             'medical_records': [],
             'extracted_info': {},
+            'new_medical_info': [],
             'error': None
         }
         
@@ -122,69 +123,25 @@ class RAGSystem:
             result['patient_identified'] = True
             result['patient_id'] = patient_id
             
-            # 3. 检索医疗记录
+            # 3. 从对话中提取新的医疗信息并保存
+            new_medical_info = self.extract_medical_info_from_conversation(transcript, patient_id)
+            result['new_medical_info'] = new_medical_info
+            
+            # 4. 检索医疗记录（包括新添加的）
             medical_records = self.retrieve_medical_context(patient_id)
             result['medical_records'] = medical_records
             
-            # 4. 保存当前对话记录到患者数据库
+            # 5. 保存对话记录
             self.patient_db.add_conversation(patient_id, transcript)
             
-            # 5. 生成并保存当前就诊记录到医疗记录数据库
-            visit_summary = self._generate_visit_summary(transcript)
-            if visit_summary:
-                self.medical_db.add_record(
-                    patient_id, 
-                    "Current Visit", 
-                    visit_summary,
-                    {"source": "audio_transcript", "date": datetime.now().isoformat()}
-                )
-                logger.info(f"Added current visit record for patient {patient_id}")
-            
             logger.info(f"Successfully processed conversation for patient {patient_id}")
+            logger.info(f"Extracted {len(new_medical_info)} new medical info items")
             
         except Exception as e:
             logger.error(f"Error processing conversation: {str(e)}")
             result['error'] = str(e)
         
         return result
-    
-    def _generate_visit_summary(self, transcript: str) -> str:
-        """从对话中生成就诊摘要"""
-        # 简单的关键词提取和摘要生成
-        symptoms = []
-        concerns = []
-        
-        # 查找症状关键词
-        symptom_keywords = ['headache', 'pain', 'fever', 'cough', 'nausea', 'dizzy', 'tired', 'hurt', 'ache', 'sore']
-        concern_keywords = ['worried', 'concerned', 'problem', 'issue', 'trouble', 'help']
-        
-        transcript_lower = transcript.lower()
-        
-        for keyword in symptom_keywords:
-            if keyword in transcript_lower:
-                symptoms.append(keyword)
-        
-        for keyword in concern_keywords:
-            if keyword in transcript_lower:
-                concerns.append(keyword)
-        
-        # 生成摘要
-        summary_parts = []
-        
-        if symptoms:
-            summary_parts.append(f"Patient reports: {', '.join(set(symptoms))}")
-        
-        if concerns:
-            summary_parts.append(f"Patient concerns: {', '.join(set(concerns))}")
-        
-        # 提取医生的回应或建议
-        if 'doctor' in transcript_lower and ('recommend' in transcript_lower or 'suggest' in transcript_lower):
-            summary_parts.append("Doctor provided recommendations")
-        
-        if not summary_parts:
-            summary_parts.append("General consultation - see full transcript for details")
-        
-        return f"Visit on {datetime.now().strftime('%Y-%m-%d')}: {'. '.join(summary_parts)}."
     
     def format_medical_records_for_display(self, records: List[Dict]) -> List[Dict]:
         """格式化医疗记录用于前端显示"""
@@ -200,6 +157,75 @@ class RAGSystem:
         
         return formatted_records
     
+    def extract_medical_info_from_conversation(self, transcript: str, patient_id: str):
+        """从对话中提取医疗信息并保存到数据库"""
+        # 改进的医疗信息提取逻辑
+        medical_keywords = {
+            'symptoms': ['headache', 'pain', 'fever', 'cough', 'nausea', 'dizzy', 'tired', 'fatigue', 'hurt', 'ache'],
+            'medications': ['taking', 'medication', 'pills', 'medicine', 'drug', 'prescription'],
+            'allergies': ['allergic', 'allergy', 'reaction'],
+            'medical_history': ['history', 'diagnosed', 'condition', 'disease', 'illness']
+        }
+        
+        # 按行分割对话，更好地识别患者的话
+        lines = transcript.strip().split('\n')
+        patient_statements = []
+        
+        for line in lines:
+            line = line.strip()
+            if line.lower().startswith('patient:') or 'patient' in line.lower():
+                # 提取患者说的话
+                if ':' in line:
+                    patient_text = line.split(':', 1)[1].strip()
+                    patient_statements.append(patient_text)
+        
+        extracted_info = []
+        
+        # 检查症状
+        for statement in patient_statements:
+            statement_lower = statement.lower()
+            for symptom in medical_keywords['symptoms']:
+                if symptom in statement_lower and len(statement) > 10:  # 避免太短的句子
+                    # 检查是否真的在描述症状
+                    if any(word in statement_lower for word in ['having', 'feeling', 'experiencing', 'suffering', 'got']):
+                        extracted_info.append({
+                            'type': 'Current Symptoms',
+                            'content': f"Patient reports: {statement}",
+                            'source': 'conversation'
+                        })
+                        break  # 每个statement只提取一次
+        
+        # 检查药物信息
+        for statement in patient_statements:
+            statement_lower = statement.lower()
+            if any(med in statement_lower for med in medical_keywords['medications']):
+                if len(statement) > 10:  # 避免太短的句子
+                    extracted_info.append({
+                        'type': 'Current Medications',
+                        'content': f"Patient mentioned: {statement}",
+                        'source': 'conversation'
+                    })
+                    break  # 只提取一次药物信息
+        
+        # 去重 - 避免相同内容的重复
+        unique_info = []
+        seen_contents = set()
+        for info in extracted_info:
+            if info['content'] not in seen_contents:
+                unique_info.append(info)
+                seen_contents.add(info['content'])
+        
+        # 保存提取的信息到数据库
+        for info in unique_info:
+            self.medical_db.add_record(
+                patient_id=patient_id,
+                record_type=info['type'],
+                content=info['content'],
+                metadata={'source': info['source'], 'date': datetime.now().isoformat()}
+            )
+        
+        return unique_info
+
     def _categorize_record(self, record_type: str) -> str:
         """将记录类型分类"""
         categories = {

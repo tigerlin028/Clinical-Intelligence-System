@@ -8,7 +8,7 @@ import requests
 import json
 
 # API配置
-API_BASE = "https://ingestion-service-523658399118.us-central1.run.app"
+API_BASE = "https://ingestion-service-ghib4spk7q-uc.a.run.app"
 
 def test_health():
     """测试服务健康状态"""
