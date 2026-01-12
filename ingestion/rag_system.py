@@ -155,8 +155,8 @@ class RAGSystem:
         concerns = []
         
         # 查找症状关键词
-        symptom_keywords = ['headache', 'pain', 'fever', 'cough', 'nausea', 'dizzy', 'tired', 'hurt']
-        concern_keywords = ['worried', 'concerned', 'problem', 'issue', 'trouble']
+        symptom_keywords = ['headache', 'pain', 'fever', 'cough', 'nausea', 'dizzy', 'tired', 'hurt', 'ache', 'sore']
+        concern_keywords = ['worried', 'concerned', 'problem', 'issue', 'trouble', 'help']
         
         transcript_lower = transcript.lower()
         
@@ -172,10 +172,14 @@ class RAGSystem:
         summary_parts = []
         
         if symptoms:
-            summary_parts.append(f"Patient reports: {', '.join(symptoms)}")
+            summary_parts.append(f"Patient reports: {', '.join(set(symptoms))}")
         
         if concerns:
-            summary_parts.append(f"Patient concerns: {', '.join(concerns)}")
+            summary_parts.append(f"Patient concerns: {', '.join(set(concerns))}")
+        
+        # 提取医生的回应或建议
+        if 'doctor' in transcript_lower and ('recommend' in transcript_lower or 'suggest' in transcript_lower):
+            summary_parts.append("Doctor provided recommendations")
         
         if not summary_parts:
             summary_parts.append("General consultation - see full transcript for details")

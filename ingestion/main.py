@@ -215,6 +215,22 @@ async def clean_duplicate_records(patient_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/clean-all-duplicates")
+async def clean_all_duplicate_records():
+    """清理所有重复医疗记录"""
+    try:
+        from database import MedicalRecordsDatabase
+        medical_db = MedicalRecordsDatabase()
+        deleted_count = medical_db.clean_duplicate_records()
+        return {
+            "deleted_duplicates": deleted_count,
+            "message": f"Cleaned {deleted_count} duplicate records from all patients"
+        }
+    except Exception as e:
+        logger.error(f"Error cleaning all duplicate records: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/initialize-sample-data")
 async def initialize_sample_data():
     """初始化示例数据（仅用于演示）"""
@@ -229,13 +245,8 @@ async def initialize_sample_data():
 @app.on_event("startup")
 def startup_event():
     print("FastAPI started. Ready to accept requests.")
-    # 自动初始化示例数据
-    try:
-        from database import init_sample_data
-        init_sample_data()
-        logger.info("Sample data initialized on startup")
-    except Exception as e:
-        logger.warning(f"Failed to initialize sample data: {e}")
+    # 不再自动初始化示例数据，避免重复
+    logger.info("Service started - use /initialize-sample-data endpoint to set up demo data")
 
 @app.options("/upload-audio")
 def options_upload_audio():

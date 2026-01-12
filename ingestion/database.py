@@ -136,33 +136,59 @@ class MedicalRecordsDatabase:
         conn.close()
     
     def add_record(self, patient_id: str, record_type: str, content: str, metadata: Dict = None):
-        """添加医疗记录"""
+        """添加医疗记录（避免重复）"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
+        # 检查是否已存在相同记录
+        cursor.execute('''
+            SELECT id FROM medical_records 
+            WHERE patient_id = ? AND record_type = ? AND content = ?
+        ''', (patient_id, record_type, content))
+        
+        existing = cursor.fetchone()
+        if existing:
+            conn.close()
+            return existing[0]  # 返回已存在记录的ID
+        
+        # 添加新记录
         cursor.execute('''
             INSERT INTO medical_records (patient_id, record_type, content, metadata)
             VALUES (?, ?, ?, ?)
         ''', (patient_id, record_type, content, json.dumps(metadata) if metadata else None))
         
+        record_id = cursor.lastrowid
         conn.commit()
         conn.close()
+        
+        return record_id
     
-    def clean_duplicate_records(self, patient_id: str):
+    def clean_duplicate_records(self, patient_id: str = None):
         """清理重复的医疗记录"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
-        # 查找重复记录（相同的patient_id, record_type, content）
-        cursor.execute('''
-            DELETE FROM medical_records 
-            WHERE id NOT IN (
-                SELECT MIN(id) 
-                FROM medical_records 
-                WHERE patient_id = ?
-                GROUP BY patient_id, record_type, content
-            ) AND patient_id = ?
-        ''', (patient_id, patient_id))
+        if patient_id:
+            # 清理特定患者的重复记录
+            cursor.execute('''
+                DELETE FROM medical_records 
+                WHERE id NOT IN (
+                    SELECT MIN(id) 
+                    FROM medical_records 
+                    WHERE patient_id = ?
+                    GROUP BY patient_id, record_type, content
+                ) AND patient_id = ?
+            ''', (patient_id, patient_id))
+        else:
+            # 清理所有重复记录
+            cursor.execute('''
+                DELETE FROM medical_records 
+                WHERE id NOT IN (
+                    SELECT MIN(id) 
+                    FROM medical_records 
+                    GROUP BY patient_id, record_type, content
+                )
+            ''')
         
         deleted_count = cursor.rowcount
         conn.commit()
@@ -209,6 +235,10 @@ def init_sample_data():
     # 医疗记录数据库
     medical_db = MedicalRecordsDatabase()
     
+    # 先清理可能的重复记录
+    medical_db.clean_duplicate_records(patient_id1)
+    medical_db.clean_duplicate_records(patient_id2)
+    
     # 检查是否已有基础医疗记录，避免重复添加
     existing_records = medical_db.get_patient_records(patient_id1)
     base_records = [r for r in existing_records if r['type'] in ['Medical History', 'Allergies']]
@@ -220,6 +250,10 @@ def init_sample_data():
         
         medical_db.add_record(patient_id1, "Allergies", 
                              "Allergic to Penicillin - causes rash and swelling.")
+        
+        # 添加一个历史就诊记录
+        medical_db.add_record(patient_id1, "Previous Visit", 
+                             "Last visit on 2024-01-10: Blood pressure 140/90, HbA1c 7.2%. Recommended diet modification.")
         
         medical_db.add_record(patient_id2, "Medical History", 
                              "Patient has asthma since childhood. Uses Albuterol inhaler as needed.")
