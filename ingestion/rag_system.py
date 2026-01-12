@@ -22,26 +22,24 @@ class RAGSystem:
         
         # 提取姓名 - 寻找 "my name is" 或 "I'm" 后面的内容
         name_patterns = [
-            r"my name is ([A-Za-z\s]+)",
-            r"I'm ([A-Za-z\s]+)",
-            r"name is ([A-Za-z\s]+)",
-            r"I am ([A-Za-z\s]+)",
-            r"it's ([A-Za-z\s]+)",
-            r"this is ([A-Za-z\s]+)"
+            r"my name is ([A-Za-z\s]+?)(?:\.|,|\s+I'm|\s+I\s|\s+currently|\s+and|\s+speaking|$)",
+            r"I'm ([A-Za-z\s]+?)(?:\.|,|\s+I'm|\s+I\s|\s+currently|\s+and|\s+speaking|$)",
+            r"name is ([A-Za-z\s]+?)(?:\.|,|\s+I'm|\s+I\s|\s+currently|\s+and|\s+speaking|$)",
+            r"I am ([A-Za-z\s]+?)(?:\.|,|\s+I'm|\s+I\s|\s+currently|\s+and|\s+speaking|$)",
+            r"it's ([A-Za-z\s]+?)(?:\.|,|\s+I'm|\s+I\s|\s+currently|\s+and|\s+speaking|$)",
+            r"this is ([A-Za-z\s]+?)(?:\.|,|\s+I'm|\s+I\s|\s+currently|\s+and|\s+speaking|$)"
         ]
         
         for pattern in name_patterns:
             match = re.search(pattern, transcript, re.IGNORECASE)
             if match:
                 name = match.group(1).strip()
-                # 过滤掉常见的非姓名词汇
-                filter_words = ['suffering', 'having', 'feeling', 'experiencing', 'again', 'back', 'here', 'now']
-                # 移除过滤词
+                # 简单验证：姓名应该是2-4个单词，每个单词首字母大写
                 name_words = name.split()
-                filtered_words = [word for word in name_words if word.lower() not in filter_words]
-                if filtered_words:
-                    name = ' '.join(filtered_words)
-                    if not any(word in name.lower() for word in ['suffering', 'having', 'feeling', 'experiencing']):
+                if len(name_words) >= 1 and len(name_words) <= 4:
+                    # 检查是否包含明显的非姓名词汇
+                    non_name_words = ['suffering', 'having', 'feeling', 'experiencing', 'currently', 'from', 'some', 'painful', 'diseases', 'and', 'don', 't', 'know', 'what', 'else']
+                    if not any(word.lower() in non_name_words for word in name_words):
                         patient_info['name'] = name
                         break
         
