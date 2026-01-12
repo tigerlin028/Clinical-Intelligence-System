@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import requests
 import uuid
@@ -11,13 +11,19 @@ import os
 from asr.transcribe import transcribe_audio
 from asr.diarize import assign_speakers
 from fastapi import Response
+import logging
 
-app = FastAPI(title="Ingestion Service")
+# 配置日志
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+app = FastAPI(title="Clinical Intelligence Ingestion Service")
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://clinical-intelligence-system.vercel.app"
+        "https://clinical-intelligence-system.vercel.app",
+        "http://localhost:3000"  # 开发环境
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -86,21 +92,72 @@ def health():
 
 @app.post("/upload-audio")
 async def upload_audio(file: UploadFile = File(...)):
+    logger.info(f"Received audio file: {file.filename}, size: {file.size}")
+    
+    # 验证文件类型
+    if not file.content_type or not file.content_type.startswith('audio/'):
+        raise HTTPException(status_code=400, detail="File must be an audio file")
+    
     # 保存临时文件
-    suffix = os.path.splitext(file.filename)[-1]
+    suffix = os.path.splitext(file.filename or "audio.wav")[-1]
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-        tmp.write(await file.read())
+        content = await file.read()
+        tmp.write(content)
         tmp_path = tmp.name
+    
+    logger.info(f"Saved temporary file: {tmp_path}")
 
     try:
+        # 1. 转录音频
+        logger.info("Starting audio transcription...")
         segments = transcribe_audio(tmp_path)
+        logger.info(f"Transcription complete: {len(segments)} segments")
+        
+        # 2. 说话人识别
+        logger.info("Assigning speakers...")
         transcript = assign_speakers(segments)
+        
+        # 3. PII 检测和脱敏
+        logger.info("Starting PII detection and redaction...")
+        full_text = " ".join([seg["text"] for seg in transcript])
+        detected_types = ner_detect_pii(full_text)
+        logger.info(f"Detected PII types: {detected_types}")
+        
+        # 对每个片段进行脱敏
+        redacted_transcript = []
+        all_redacted_entities = set()
+        
+        for seg in transcript:
+            redacted_text, entities = redact_pii(
+                seg["text"],
+                allowed_types=detected_types
+            )
+            redacted_transcript.append({
+                "speaker": seg["speaker"],
+                "text": redacted_text
+            })
+            all_redacted_entities.update(entities)
 
+        logger.info(f"Processing complete. Redacted entities: {list(all_redacted_entities)}")
+        
         return {
-            "transcript": transcript
+            "transcript": redacted_transcript,
+            "redaction_summary": list(all_redacted_entities),
+            "detected_entity_types": detected_types,
+            "processing_note": "Phase 1: Audio transcription with speaker identification and PII redaction",
+            "segments_count": len(segments)
         }
+        
+    except Exception as e:
+        logger.error(f"Error processing audio: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Audio processing failed: {str(e)}")
     finally:
-        os.remove(tmp_path)
+        # 清理临时文件
+        try:
+            os.remove(tmp_path)
+            logger.info(f"Cleaned up temporary file: {tmp_path}")
+        except Exception as e:
+            logger.warning(f"Failed to clean up temporary file: {e}")
     
 @app.on_event("startup")
 def startup_event():

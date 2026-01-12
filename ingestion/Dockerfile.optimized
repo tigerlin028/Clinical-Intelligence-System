@@ -1,0 +1,29 @@
+# 多阶段构建，优化缓存
+FROM python:3.11-slim as base
+
+# 安装系统依赖
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+# 设置工作目录
+WORKDIR /app
+
+# 先复制 requirements.txt，利用 Docker 层缓存
+COPY requirements.txt .
+
+# 安装 Python 依赖（这一层会被缓存）
+RUN pip install --no-cache-dir -r requirements.txt
+
+# 下载 spaCy 模型（这一层也会被缓存）
+RUN python -m spacy download en_core_web_sm
+
+# 最后复制应用代码（只有代码变化时才重新构建这一层）
+COPY . .
+
+# 暴露端口
+EXPOSE 8080
+
+# 启动命令
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]

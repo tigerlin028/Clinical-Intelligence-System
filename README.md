@@ -1,52 +1,78 @@
 # Clinical Ambient Intelligence System
 
-A microservices-based clinical ambient intelligence system.
+A microservices-based clinical ambient intelligence system for processing medical conversations with privacy-first design.
 
 ## Architecture
 
-- frontend/     : Next.js UI
-- ingestion/    : Audio ingestion & streaming
-- intelligence/ : PII redaction, RAG, reasoning
+- **frontend/**     : Next.js UI (deployed on Vercel)
+- **ingestion/**    : Audio ingestion & streaming (FastAPI on Google Cloud Run)
+- **intelligence/** : PII redaction, RAG, reasoning (planned)
 
 ---
 
-## Phase 1 · Feature 1 — Cloud Infrastructure Setup
+## Phase 1 Implementation Status
 
-**Objective**  
-Validate the core cloud architecture by deploying all services to the public internet and verifying end-to-end communication. This feature focuses on infrastructure correctness rather than AI capability.
+### ✅ Feature 1 — Cloud Infrastructure Setup
 
-**Architecture**  
-Browser (Next.js, Vercel) → Ingestion Service (FastAPI, Cloud Run) → Intelligence Logic (Phase 1 stub)
+**Status:** Complete  
+**Objective:** Validate core cloud architecture with end-to-end communication
 
-**Implementation**  
-- **Frontend:** Next.js UI deployed on Vercel; sends test input via HTTPS.  
-- **Ingestion Service:** Dockerized FastAPI service deployed on Google Cloud Run; normalizes requests and manages sessions.  
-- **Intelligence Logic:** Stubbed processing layer to validate data flow before introducing AI features.
+- **Frontend:** Next.js UI deployed on Vercel with HTTPS
+- **Backend:** FastAPI service on Google Cloud Run with proper CORS
+- **Communication:** Verified end-to-end HTTPS communication
+- **Error Handling:** Comprehensive error handling and user feedback
 
-**End-to-End Flow**  
-User action in browser → JSON request to Ingestion Service → intelligence logic processes input → response returned and logged in browser console.
+### ✅ Feature 3 — Audio Processing Pipeline
 
-**Status**  
-Feature 1 complete. Public HTTPS access, CORS handling, and cloud deployment are verified. Real-time streaming and AI logic are deferred to later features.
+**Status:** Complete  
+**Objective:** Convert audio to structured transcript with speaker identification
+
+**Implementation:**
+- **Audio Transcription:** Faster Whisper model (base, CPU optimized)
+- **Speaker Diarization:** Enhanced heuristic-based speaker assignment
+  - Patient indicators: "I feel", "I have", "my pain"
+  - Medical questions: "what should I", "how do I"
+  - Professional language detection
+- **File Support:** All common audio formats (mp3, wav, m4a, etc.)
+
+### ✅ Feature 4 — PII / PHI Redaction Layer
+
+**Status:** Complete  
+**Objective:** Privacy-first processing with automatic sensitive data redaction
+
+**Implementation:**
+- **Semantic Detection:** spaCy NER model for intelligent PII detection
+- **Multi-layer Redaction:**
+  - Always-on: Dates (multiple formats), SSN patterns
+  - Conditional: Names (only when semantically detected)
+- **Privacy Design:** Raw text never sent to frontend
+- **Transparency:** Users see what was redacted and why
 
 ---
 
-## Phase 1 · Feature 4 — PII / PHI Redaction Layer
+## Demo Usage
 
-**Objective**  
-Establish a privacy boundary by detecting and redacting sensitive clinical information (PII / PHI) before any text is displayed in the UI or used for downstream processing.
+1. **Upload Audio:** Drag and drop or select audio file
+2. **Processing:** System automatically:
+   - Transcribes speech to text
+   - Identifies speakers (Doctor/Patient)
+   - Detects and redacts sensitive information
+3. **Results:** View privacy-protected transcript with speaker labels
 
-**Architecture Extension**  
-Browser → Ingestion Service → Semantic PII Detector → Deterministic Redactor → Redacted Output
+## Technical Features
 
-**Implementation**  
-- **Semantic Detection:** Local spaCy NER model identifies whether name redaction should be attempted.  
-- **Deterministic Redaction:** Rule-based masking for high-certainty entities (e.g., SSN, dates), with name redaction gated by semantic detection.  
-- **Safety Design:** Raw text is retained server-side for processing but never rendered in the UI.
+- **Privacy-First:** All PII/PHI automatically redacted
+- **Speaker Intelligence:** Context-aware speaker identification
+- **Error Resilience:** Comprehensive error handling and recovery
+- **Cloud-Native:** Scalable microservices architecture
+- **Real-time Feedback:** Processing status and privacy notifications
 
-**Data Flow**  
-Input text → PII detection → redaction → redacted text returned to frontend and downstream logic.
+---
 
-**Status**  
-Feature 4 complete. Server-side PII redaction is enforced, UI displays only redacted content, and the system is prepared for retrieval and reasoning features.
+## Next Phase Features (Planned)
+
+- **Real-time Audio Streaming:** Live conversation processing
+- **Advanced RAG:** Medical knowledge retrieval and reasoning
+- **Clinical Insights:** Automated clinical note generation
+- **Integration APIs:** EHR system connectivity
 
