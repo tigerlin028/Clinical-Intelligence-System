@@ -10,6 +10,7 @@ import tempfile
 import os
 from asr.transcribe import transcribe_audio
 from asr.diarize import assign_speakers
+from fastapi import Response
 
 app = FastAPI(title="Ingestion Service")
 
@@ -105,3 +106,13 @@ async def upload_audio(file: UploadFile = File(...)):
 def startup_event():
     print("FastAPI started. Ready to accept requests.")
 
+@app.options("/upload-audio")
+def options_upload_audio():
+    return Response(
+        status_code=204,
+        headers={
+            "Access-Control-Allow-Origin": "https://clinical-intelligence-system.vercel.app",
+            "Access-Control-Allow-Methods": "POST, OPTIONS",
+            "Access-Control-Allow-Headers": "*",
+        },
+    )
