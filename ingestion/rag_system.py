@@ -161,51 +161,94 @@ class RAGSystem:
         """从对话中提取医疗信息并保存到数据库"""
         # 改进的医疗信息提取逻辑
         medical_keywords = {
-            'symptoms': ['headache', 'pain', 'fever', 'cough', 'nausea', 'dizzy', 'tired', 'fatigue', 'hurt', 'ache'],
+            'symptoms': ['headache', 'pain', 'fever', 'cough', 'nausea', 'dizzy', 'tired', 'fatigue', 'hurt', 'ache', 'cold', 'sick'],
             'medications': ['taking', 'medication', 'pills', 'medicine', 'drug', 'prescription'],
             'allergies': ['allergic', 'allergy', 'reaction'],
             'medical_history': ['history', 'diagnosed', 'condition', 'disease', 'illness']
         }
         
-        # 按行分割对话，更好地识别患者的话
-        lines = transcript.strip().split('\n')
+        # 处理不同格式的转录文本
         patient_statements = []
+        doctor_statements = []
         
-        for line in lines:
-            line = line.strip()
-            if line.lower().startswith('patient:') or 'patient' in line.lower():
-                # 提取患者说的话
-                if ':' in line:
+        # 如果是结构化的对话格式（Speaker: Text）
+        if 'Patient:' in transcript or 'Doctor:' in transcript:
+            lines = transcript.strip().split('\n')
+            for line in lines:
+                line = line.strip()
+                if line.lower().startswith('patient:'):
                     patient_text = line.split(':', 1)[1].strip()
                     patient_statements.append(patient_text)
+                elif line.lower().startswith('doctor:'):
+                    doctor_text = line.split(':', 1)[1].strip()
+                    doctor_statements.append(doctor_text)
+        else:
+            # 如果是普通文本，尝试从整个文本中提取
+            # 这里可以添加更复杂的逻辑来识别患者和医生的话
+            patient_statements.append(transcript)
         
         extracted_info = []
+        current_date = datetime.now().strftime('%Y/%m/%d')
         
-        # 检查症状
+        # 检查症状 - 从患者的话中提取
         for statement in patient_statements:
             statement_lower = statement.lower()
+            found_symptoms = []
+            
             for symptom in medical_keywords['symptoms']:
-                if symptom in statement_lower and len(statement) > 10:  # 避免太短的句子
-                    # 检查是否真的在描述症状
-                    if any(word in statement_lower for word in ['having', 'feeling', 'experiencing', 'suffering', 'got']):
-                        extracted_info.append({
-                            'type': 'Current Symptoms',
-                            'content': f"Patient reports: {statement}",
-                            'source': 'conversation'
-                        })
-                        break  # 每个statement只提取一次
+                if symptom in statement_lower:
+                    found_symptoms.append(symptom)
+            
+            if found_symptoms and len(statement) > 5:  # 避免太短的句子
+                extracted_info.append({
+                    'type': 'Current Symptoms',
+                    'content': f"Patient reports: {statement}",
+                    'source': 'audio_conversation',
+                    'date': current_date
+                })
+                break  # 每次对话只提取一次症状信息
         
-        # 检查药物信息
+        # 检查药物信息 - 从患者的话中提取
         for statement in patient_statements:
             statement_lower = statement.lower()
             if any(med in statement_lower for med in medical_keywords['medications']):
-                if len(statement) > 10:  # 避免太短的句子
+                if len(statement) > 5:  # 避免太短的句子
                     extracted_info.append({
                         'type': 'Current Medications',
                         'content': f"Patient mentioned: {statement}",
-                        'source': 'conversation'
+                        'source': 'audio_conversation',
+                        'date': current_date
                     })
                     break  # 只提取一次药物信息
+        
+        # 检查医生的话中是否有重要信息
+        for statement in doctor_statements:
+            statement_lower = statement.lower()
+            if any(word in statement_lower for word in ['diagnosis', 'recommend', 'prescribe', 'treatment']):
+                if len(statement) > 10:
+                    extracted_info.append({
+                        'type': 'Doctor Notes',
+                        'content': f"Doctor noted: {statement}",
+                        'source': 'audio_conversation',
+                        'date': current_date
+                    })
+                    break
+        
+        # 如果没有提取到具体的医疗信息，但有对话内容，保存为一般对话记录
+        if not extracted_info and (patient_statements or doctor_statements):
+            conversation_summary = []
+            if patient_statements:
+                conversation_summary.append(f"Patient: {'; '.join(patient_statements[:2])}")  # 只取前两句
+            if doctor_statements:
+                conversation_summary.append(f"Doctor: {'; '.join(doctor_statements[:2])}")   # 只取前两句
+            
+            if conversation_summary:
+                extracted_info.append({
+                    'type': 'Conversation Notes',
+                    'content': f"Audio conversation - {'; '.join(conversation_summary)}",
+                    'source': 'audio_conversation',
+                    'date': current_date
+                })
         
         # 去重 - 避免相同内容的重复
         unique_info = []
@@ -221,8 +264,13 @@ class RAGSystem:
                 patient_id=patient_id,
                 record_type=info['type'],
                 content=info['content'],
-                metadata={'source': info['source'], 'date': datetime.now().isoformat()}
+                metadata={
+                    'source': info['source'], 
+                    'date': datetime.now().isoformat(),
+                    'conversation_date': info['date']
+                }
             )
+            print(f"Added new record: {info['type']} - {info['content'][:50]}...")
         
         return unique_info
 
