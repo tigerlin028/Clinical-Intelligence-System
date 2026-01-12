@@ -13,7 +13,7 @@ class PatientDatabase:
         self.init_database()
     
     def init_database(self):
-        """初始化数据库表"""
+        """初始化数据库表 - 只存储患者身份信息"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
@@ -25,18 +25,6 @@ class PatientDatabase:
                 ssn_hash TEXT NOT NULL,
                 dob_hash TEXT NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        # 对话记录表
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS conversations (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                patient_id TEXT NOT NULL,
-                transcript TEXT NOT NULL,
-                summary TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (patient_id) REFERENCES patients (patient_id)
             )
         ''')
         
@@ -116,17 +104,11 @@ class PatientDatabase:
         return None
     
     def add_conversation(self, patient_id: str, transcript: str, summary: str = None):
-        """添加对话记录"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            INSERT INTO conversations (patient_id, transcript, summary)
-            VALUES (?, ?, ?)
-        ''', (patient_id, transcript, summary))
-        
-        conn.commit()
-        conn.close()
+        """添加对话记录 - 现在存储在medical_records.db中"""
+        # 将对话记录作为医疗记录存储
+        from database import MedicalRecordsDatabase
+        medical_db = MedicalRecordsDatabase()
+        medical_db.add_conversation(patient_id, transcript, summary)
 
 
 class MedicalRecordsDatabase:
@@ -137,10 +119,11 @@ class MedicalRecordsDatabase:
         self.init_database()
     
     def init_database(self):
-        """初始化医疗记录数据库"""
+        """初始化医疗记录数据库 - 包含医疗记录和对话记录"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
+        # 医疗记录表
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS medical_records (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -149,6 +132,17 @@ class MedicalRecordsDatabase:
                 content TEXT NOT NULL,
                 date_recorded TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 metadata TEXT
+            )
+        ''')
+        
+        # 对话记录表 - 移到这里
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS conversations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                patient_id TEXT NOT NULL,
+                transcript TEXT NOT NULL,
+                summary TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
         
@@ -201,6 +195,43 @@ class MedicalRecordsDatabase:
         
         conn.close()
         return records
+    
+    def add_conversation(self, patient_id: str, transcript: str, summary: str = None):
+        """添加对话记录到medical_records数据库"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            INSERT INTO conversations (patient_id, transcript, summary)
+            VALUES (?, ?, ?)
+        ''', (patient_id, transcript, summary))
+        
+        conn.commit()
+        conn.close()
+        print(f"Added conversation record for patient {patient_id}")
+    
+    def get_conversations(self, patient_id: str) -> List[Dict]:
+        """获取患者的对话记录"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT transcript, summary, created_at
+            FROM conversations
+            WHERE patient_id = ?
+            ORDER BY created_at DESC
+        ''', (patient_id,))
+        
+        conversations = []
+        for row in cursor.fetchall():
+            conversations.append({
+                'transcript': row[0],
+                'summary': row[1],
+                'created_at': row[2]
+            })
+        
+        conn.close()
+        return conversations
 
 
 # 初始化示例数据
@@ -210,7 +241,7 @@ def init_sample_data():
     # 患者数据库
     patient_db = PatientDatabase()
     
-    # 添加示例患者
+    # 添加示例患者py
     patient_id1 = patient_db.add_patient("John Smith", "123-45-6789", "1985-03-15")
     patient_id2 = patient_db.add_patient("Mary Johnson", "987-65-4321", "1990-07-22")
     
