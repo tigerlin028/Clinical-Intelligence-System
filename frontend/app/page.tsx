@@ -11,7 +11,7 @@ export default function AudioUploadDemo() {
     formData.append("file", file);
 
     const res = await fetch(
-      "https://ingestion-service-xxxxx.us-central1.run.app/upload-audio",
+      "https://ingestion-service-xxxxx.us-central1.run.app/upload-audio/",
       {
         method: "POST",
         body: formData,
