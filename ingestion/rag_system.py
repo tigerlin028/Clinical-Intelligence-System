@@ -2,6 +2,7 @@
 import re
 from typing import Dict, List, Optional, Tuple
 from database import PatientDatabase, MedicalRecordsDatabase
+from datetime import datetime
 import logging
 
 logger = logging.getLogger(__name__)
@@ -125,8 +126,19 @@ class RAGSystem:
             medical_records = self.retrieve_medical_context(patient_id)
             result['medical_records'] = medical_records
             
-            # 4. 保存对话记录
+            # 4. 保存当前对话记录到患者数据库
             self.patient_db.add_conversation(patient_id, transcript)
+            
+            # 5. 生成并保存当前就诊记录到医疗记录数据库
+            visit_summary = self._generate_visit_summary(transcript)
+            if visit_summary:
+                self.medical_db.add_record(
+                    patient_id, 
+                    "Current Visit", 
+                    visit_summary,
+                    {"source": "audio_transcript", "date": datetime.now().isoformat()}
+                )
+                logger.info(f"Added current visit record for patient {patient_id}")
             
             logger.info(f"Successfully processed conversation for patient {patient_id}")
             
@@ -135,6 +147,40 @@ class RAGSystem:
             result['error'] = str(e)
         
         return result
+    
+    def _generate_visit_summary(self, transcript: str) -> str:
+        """从对话中生成就诊摘要"""
+        # 简单的关键词提取和摘要生成
+        symptoms = []
+        concerns = []
+        
+        # 查找症状关键词
+        symptom_keywords = ['headache', 'pain', 'fever', 'cough', 'nausea', 'dizzy', 'tired', 'hurt']
+        concern_keywords = ['worried', 'concerned', 'problem', 'issue', 'trouble']
+        
+        transcript_lower = transcript.lower()
+        
+        for keyword in symptom_keywords:
+            if keyword in transcript_lower:
+                symptoms.append(keyword)
+        
+        for keyword in concern_keywords:
+            if keyword in transcript_lower:
+                concerns.append(keyword)
+        
+        # 生成摘要
+        summary_parts = []
+        
+        if symptoms:
+            summary_parts.append(f"Patient reports: {', '.join(symptoms)}")
+        
+        if concerns:
+            summary_parts.append(f"Patient concerns: {', '.join(concerns)}")
+        
+        if not summary_parts:
+            summary_parts.append("General consultation - see full transcript for details")
+        
+        return f"Visit on {datetime.now().strftime('%Y-%m-%d')}: {'. '.join(summary_parts)}."
     
     def format_medical_records_for_display(self, records: List[Dict]) -> List[Dict]:
         """格式化医疗记录用于前端显示"""

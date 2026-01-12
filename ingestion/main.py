@@ -198,6 +198,23 @@ async def get_patient_records(patient_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/clean-duplicate-records/{patient_id}")
+async def clean_duplicate_records(patient_id: str):
+    """清理特定患者的重复医疗记录"""
+    try:
+        from database import MedicalRecordsDatabase
+        medical_db = MedicalRecordsDatabase()
+        deleted_count = medical_db.clean_duplicate_records(patient_id)
+        return {
+            "patient_id": patient_id,
+            "deleted_duplicates": deleted_count,
+            "message": f"Cleaned {deleted_count} duplicate records"
+        }
+    except Exception as e:
+        logger.error(f"Error cleaning duplicate records: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/initialize-sample-data")
 async def initialize_sample_data():
     """初始化示例数据（仅用于演示）"""

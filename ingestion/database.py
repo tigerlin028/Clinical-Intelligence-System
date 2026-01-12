@@ -148,6 +148,28 @@ class MedicalRecordsDatabase:
         conn.commit()
         conn.close()
     
+    def clean_duplicate_records(self, patient_id: str):
+        """清理重复的医疗记录"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        # 查找重复记录（相同的patient_id, record_type, content）
+        cursor.execute('''
+            DELETE FROM medical_records 
+            WHERE id NOT IN (
+                SELECT MIN(id) 
+                FROM medical_records 
+                WHERE patient_id = ?
+                GROUP BY patient_id, record_type, content
+            ) AND patient_id = ?
+        ''', (patient_id, patient_id))
+        
+        deleted_count = cursor.rowcount
+        conn.commit()
+        conn.close()
+        
+        return deleted_count
+    
     def get_patient_records(self, patient_id: str) -> List[Dict]:
         """获取患者的所有医疗记录"""
         conn = sqlite3.connect(self.db_path)
@@ -175,7 +197,7 @@ class MedicalRecordsDatabase:
 
 # 初始化示例数据
 def init_sample_data():
-    """初始化一些示例数据用于演示"""
+    """初始化一些示例数据用于演示（避免重复）"""
     
     # 患者数据库
     patient_db = PatientDatabase()
@@ -187,25 +209,29 @@ def init_sample_data():
     # 医疗记录数据库
     medical_db = MedicalRecordsDatabase()
     
-    # 添加示例医疗记录
-    medical_db.add_record(patient_id1, "Medical History", 
-                         "Patient has a history of hypertension and diabetes. Currently on Metformin 500mg twice daily.")
+    # 检查是否已有基础医疗记录，避免重复添加
+    existing_records = medical_db.get_patient_records(patient_id1)
+    base_records = [r for r in existing_records if r['type'] in ['Medical History', 'Allergies']]
     
-    medical_db.add_record(patient_id1, "Previous Visit", 
-                         "Last visit on 2024-01-10: Blood pressure 140/90, HbA1c 7.2%. Recommended diet modification.")
+    if not base_records:
+        # 只添加基础医疗记录，避免重复
+        medical_db.add_record(patient_id1, "Medical History", 
+                             "Patient has a history of hypertension and diabetes. Currently on Metformin 500mg twice daily.")
+        
+        medical_db.add_record(patient_id1, "Allergies", 
+                             "Allergic to Penicillin - causes rash and swelling.")
+        
+        medical_db.add_record(patient_id2, "Medical History", 
+                             "Patient has asthma since childhood. Uses Albuterol inhaler as needed.")
+        
+        print(f"Base medical records initialized for patients")
+    else:
+        print(f"Base medical records already exist, skipping initialization")
     
-    medical_db.add_record(patient_id1, "Allergies", 
-                         "Allergic to Penicillin - causes rash and swelling.")
-    
-    medical_db.add_record(patient_id2, "Medical History", 
-                         "Patient has asthma since childhood. Uses Albuterol inhaler as needed.")
-    
-    medical_db.add_record(patient_id2, "Previous Visit", 
-                         "Last visit on 2024-01-05: Respiratory function normal, no acute symptoms.")
-    
-    print(f"Sample data initialized:")
     print(f"Patient 1 ID: {patient_id1}")
     print(f"Patient 2 ID: {patient_id2}")
+    
+    return patient_id1, patient_id2
 
 
 if __name__ == "__main__":
