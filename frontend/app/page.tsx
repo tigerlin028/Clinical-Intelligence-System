@@ -1,71 +1,51 @@
 "use client";
-
 import { useState } from "react";
 
-export default function Home() {
-  const [inputText, setInputText] = useState("");
-  const [response, setResponse] = useState<string | null>(null);
+export default function AudioUploadDemo() {
+  const [transcript, setTranscript] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const sendTest = async () => {
+  const uploadAudio = async (file: File) => {
     setLoading(true);
-    setResponse(null);
+    const formData = new FormData();
+    formData.append("file", file);
 
-    try {
-      const res = await fetch(
-        "https://ingestion-service-523658399118.us-central1.run.app/ingest",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            text: inputText,
-          }),
-        }
-      );
+    const res = await fetch(
+      "https://ingestion-service-xxxxx.us-central1.run.app/upload-audio",
+      {
+        method: "POST",
+        body: formData,
+      }
+    );
 
-      const data = await res.json();
-      setResponse(data.result.redacted_text);
-    } catch (err) {
-      console.error("Request failed:", err);
-      setResponse("Request failed");
-    } finally {
-      setLoading(false);
-    }
+    const data = await res.json();
+    setTranscript(data.transcript);
+    setLoading(false);
   };
 
   return (
-    <main style={{ padding: "40px", maxWidth: "600px" }}>
-      <h1>Clinical Ambient Intelligence</h1>
-      <p>Feature 4 – PII / PHI Redaction</p>
+    <div style={{ padding: 20 }}>
+      <h2>Clinical Audio Upload (Demo)</h2>
 
-      <textarea
-        rows={4}
-        style={{ width: "100%", marginBottom: "12px" }}
-        placeholder="Enter text with PII (e.g. SSN, name, date)"
-        value={inputText}
-        onChange={(e) => setInputText(e.target.value)}
+      <input
+        type="file"
+        accept="audio/*"
+        onChange={(e) => {
+          if (e.target.files?.[0]) {
+            uploadAudio(e.target.files[0]);
+          }
+        }}
       />
 
-      <button onClick={sendTest} disabled={loading || !inputText}>
-        {loading ? "Processing..." : "Send Test"}
-      </button>
+      {loading && <p>Processing audio…</p>}
 
-      {response && (
-        <div
-          style={{
-            marginTop: "20px",
-            padding: "12px",
-            border: "1px solid #ccc",
-            background: "#f9f9f9",
-            fontWeight: "bold",
-          }}
-        >
-          Redacted Output:
-          <div style={{ marginTop: "8px" }}>{response}</div>
-        </div>
-      )}
-    </main>
+      <ul>
+        {transcript.map((seg, i) => (
+          <li key={i}>
+            <b>{seg.speaker}:</b> {seg.text}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }

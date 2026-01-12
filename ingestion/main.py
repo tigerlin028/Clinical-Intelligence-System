@@ -5,6 +5,11 @@ import uuid
 from fastapi.middleware.cors import CORSMiddleware
 from pii import redact_pii
 from pii_ner import ner_detect_pii
+from fastapi import UploadFile, File
+import tempfile
+import os
+from asr.transcribe import transcribe_audio
+from asr.diarize import assign_speakers
 
 app = FastAPI(title="Ingestion Service")
 
@@ -76,3 +81,27 @@ def ingest(req: IngestRequest):
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.post("/upload-audio")
+async def upload_audio(file: UploadFile = File(...)):
+    # 保存临时文件
+    suffix = os.path.splitext(file.filename)[-1]
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        tmp.write(await file.read())
+        tmp_path = tmp.name
+
+    try:
+        segments = transcribe_audio(tmp_path)
+        transcript = assign_speakers(segments)
+
+        return {
+            "transcript": transcript
+        }
+    finally:
+        os.remove(tmp_path)
+    
+@app.on_event("startup")
+def startup_event():
+    print("FastAPI started. Ready to accept requests.")
+
