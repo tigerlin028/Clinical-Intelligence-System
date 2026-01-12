@@ -65,35 +65,55 @@ class PatientDatabase:
         return patient_id
     
     def find_patient(self, name: str = None, ssn: str = None, dob: str = None) -> Optional[str]:
-        """根据PII信息查找患者ID"""
+        """根据PII信息查找患者ID - 优先使用更多信息匹配"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
-        conditions = []
-        params = []
+        # 构建查询条件 - 按优先级排序
+        queries = []
         
+        # 1. 如果有完整信息，优先精确匹配
+        if name and ssn and dob:
+            queries.append({
+                'query': "SELECT patient_id FROM patients WHERE name_hash = ? AND ssn_hash = ? AND dob_hash = ?",
+                'params': [self.hash_pii(name), self.hash_pii(ssn), self.hash_pii(dob)],
+                'priority': 1
+            })
+        
+        # 2. 姓名+SSN匹配
+        if name and ssn:
+            queries.append({
+                'query': "SELECT patient_id FROM patients WHERE name_hash = ? AND ssn_hash = ?",
+                'params': [self.hash_pii(name), self.hash_pii(ssn)],
+                'priority': 2
+            })
+        
+        # 3. 姓名+DOB匹配
+        if name and dob:
+            queries.append({
+                'query': "SELECT patient_id FROM patients WHERE name_hash = ? AND dob_hash = ?",
+                'params': [self.hash_pii(name), self.hash_pii(dob)],
+                'priority': 3
+            })
+        
+        # 4. 仅姓名匹配（最后选择）
         if name:
-            conditions.append("name_hash = ?")
-            params.append(self.hash_pii(name))
+            queries.append({
+                'query': "SELECT patient_id FROM patients WHERE name_hash = ?",
+                'params': [self.hash_pii(name)],
+                'priority': 4
+            })
         
-        if ssn:
-            conditions.append("ssn_hash = ?")
-            params.append(self.hash_pii(ssn))
-        
-        if dob:
-            conditions.append("dob_hash = ?")
-            params.append(self.hash_pii(dob))
-        
-        if not conditions:
-            conn.close()
-            return None
-        
-        query = f"SELECT patient_id FROM patients WHERE {' AND '.join(conditions)}"
-        cursor.execute(query, params)
-        result = cursor.fetchone()
+        # 按优先级执行查询
+        for query_info in sorted(queries, key=lambda x: x['priority']):
+            cursor.execute(query_info['query'], query_info['params'])
+            result = cursor.fetchone()
+            if result:
+                conn.close()
+                return result[0]
         
         conn.close()
-        return result[0] if result else None
+        return None
     
     def add_conversation(self, patient_id: str, transcript: str, summary: str = None):
         """添加对话记录"""

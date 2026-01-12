@@ -4,6 +4,8 @@ from typing import Dict, List, Optional, Tuple
 from database import PatientDatabase, MedicalRecordsDatabase
 import logging
 from datetime import datetime
+from pii import redact_pii
+from pii_ner import ner_detect_pii
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +25,9 @@ class RAGSystem:
             r"my name is ([A-Za-z\s]+)",
             r"I'm ([A-Za-z\s]+)",
             r"name is ([A-Za-z\s]+)",
-            r"I am ([A-Za-z\s]+)"
+            r"I am ([A-Za-z\s]+)",
+            r"it's ([A-Za-z\s]+)",
+            r"this is ([A-Za-z\s]+)"
         ]
         
         for pattern in name_patterns:
@@ -31,9 +35,15 @@ class RAGSystem:
             if match:
                 name = match.group(1).strip()
                 # 过滤掉常见的非姓名词汇
-                if not any(word in name.lower() for word in ['suffering', 'having', 'feeling', 'experiencing']):
-                    patient_info['name'] = name
-                    break
+                filter_words = ['suffering', 'having', 'feeling', 'experiencing', 'again', 'back', 'here', 'now']
+                # 移除过滤词
+                name_words = name.split()
+                filtered_words = [word for word in name_words if word.lower() not in filter_words]
+                if filtered_words:
+                    name = ' '.join(filtered_words)
+                    if not any(word in name.lower() for word in ['suffering', 'having', 'feeling', 'experiencing']):
+                        patient_info['name'] = name
+                        break
         
         # 提取SSN - 寻找XXX-XX-XXXX格式
         ssn_pattern = r"\b(\d{3}[-\s]?\d{2}[-\s]?\d{4})\b"
@@ -60,7 +70,7 @@ class RAGSystem:
         return patient_info
     
     def identify_patient(self, transcript: str) -> Optional[str]:
-        """识别患者身份并返回patient_id"""
+        """识别患者身份并返回patient_id，如果不存在则创建新患者"""
         patient_info = self.extract_patient_info(transcript)
         
         if not patient_info:
@@ -69,7 +79,7 @@ class RAGSystem:
         
         logger.info(f"Extracted patient info: {patient_info}")
         
-        # 尝试匹配患者
+        # 尝试匹配现有患者
         patient_id = self.patient_db.find_patient(
             name=patient_info.get('name'),
             ssn=patient_info.get('ssn'),
@@ -77,9 +87,20 @@ class RAGSystem:
         )
         
         if patient_id:
-            logger.info(f"Patient identified: {patient_id}")
+            logger.info(f"Existing patient identified: {patient_id}")
         else:
-            logger.warning("Patient not found in database")
+            # 如果找不到患者，创建新患者记录
+            if patient_info.get('name'):
+                # 为新患者生成默认信息（如果缺少SSN或DOB）
+                name = patient_info.get('name')
+                ssn = patient_info.get('ssn', '000-00-0000')  # 默认SSN
+                dob = patient_info.get('dob', '1900-01-01')   # 默认DOB
+                
+                patient_id = self.patient_db.add_patient(name, ssn, dob)
+                logger.info(f"Created new patient: {patient_id} for {name}")
+            else:
+                logger.warning("Cannot create patient without name")
+                return None
         
         return patient_id
     
@@ -113,11 +134,11 @@ class RAGSystem:
                 result['error'] = "No patient information found in transcript"
                 return result
             
-            # 2. 识别患者
+            # 2. 识别患者（如果不存在则自动创建）
             patient_id = self.identify_patient(transcript)
             
             if not patient_id:
-                result['error'] = "Patient not found in database"
+                result['error'] = "Unable to identify or create patient record"
                 return result
             
             result['patient_identified'] = True
@@ -158,10 +179,10 @@ class RAGSystem:
         return formatted_records
     
     def extract_medical_info_from_conversation(self, transcript: str, patient_id: str):
-        """从对话中提取医疗信息并保存到数据库"""
+        """从对话中提取医疗信息并保存到数据库（带PII脱敏）"""
         # 改进的医疗信息提取逻辑
         medical_keywords = {
-            'symptoms': ['headache', 'pain', 'fever', 'cough', 'nausea', 'dizzy', 'tired', 'fatigue', 'hurt', 'ache', 'cold', 'sick'],
+            'symptoms': ['headache', 'pain', 'fever', 'cough', 'nausea', 'dizzy', 'tired', 'fatigue', 'hurt', 'ache', 'cold', 'sick', 'stomachache'],
             'medications': ['taking', 'medication', 'pills', 'medicine', 'drug', 'prescription'],
             'allergies': ['allergic', 'allergy', 'reaction'],
             'medical_history': ['history', 'diagnosed', 'condition', 'disease', 'illness']
@@ -200,9 +221,13 @@ class RAGSystem:
                     found_symptoms.append(symptom)
             
             if found_symptoms and len(statement) > 5:  # 避免太短的句子
+                # 对存储的内容进行PII脱敏
+                detected_types = ner_detect_pii(statement)
+                redacted_statement, _ = redact_pii(statement, detected_types)
+                
                 extracted_info.append({
                     'type': 'Current Symptoms',
-                    'content': f"Patient reports: {statement}",
+                    'content': f"Patient reports: {redacted_statement}",
                     'source': 'audio_conversation',
                     'date': current_date
                 })
@@ -213,9 +238,13 @@ class RAGSystem:
             statement_lower = statement.lower()
             if any(med in statement_lower for med in medical_keywords['medications']):
                 if len(statement) > 5:  # 避免太短的句子
+                    # 对存储的内容进行PII脱敏
+                    detected_types = ner_detect_pii(statement)
+                    redacted_statement, _ = redact_pii(statement, detected_types)
+                    
                     extracted_info.append({
                         'type': 'Current Medications',
-                        'content': f"Patient mentioned: {statement}",
+                        'content': f"Patient mentioned: {redacted_statement}",
                         'source': 'audio_conversation',
                         'date': current_date
                     })
@@ -226,9 +255,13 @@ class RAGSystem:
             statement_lower = statement.lower()
             if any(word in statement_lower for word in ['diagnosis', 'recommend', 'prescribe', 'treatment']):
                 if len(statement) > 10:
+                    # 对存储的内容进行PII脱敏
+                    detected_types = ner_detect_pii(statement)
+                    redacted_statement, _ = redact_pii(statement, detected_types)
+                    
                     extracted_info.append({
                         'type': 'Doctor Notes',
-                        'content': f"Doctor noted: {statement}",
+                        'content': f"Doctor noted: {redacted_statement}",
                         'source': 'audio_conversation',
                         'date': current_date
                     })
@@ -238,9 +271,22 @@ class RAGSystem:
         if not extracted_info and (patient_statements or doctor_statements):
             conversation_summary = []
             if patient_statements:
-                conversation_summary.append(f"Patient: {'; '.join(patient_statements[:2])}")  # 只取前两句
+                # 对患者话语进行脱敏
+                redacted_patient_statements = []
+                for stmt in patient_statements[:2]:  # 只取前两句
+                    detected_types = ner_detect_pii(stmt)
+                    redacted_stmt, _ = redact_pii(stmt, detected_types)
+                    redacted_patient_statements.append(redacted_stmt)
+                conversation_summary.append(f"Patient: {'; '.join(redacted_patient_statements)}")
+                
             if doctor_statements:
-                conversation_summary.append(f"Doctor: {'; '.join(doctor_statements[:2])}")   # 只取前两句
+                # 对医生话语进行脱敏
+                redacted_doctor_statements = []
+                for stmt in doctor_statements[:2]:  # 只取前两句
+                    detected_types = ner_detect_pii(stmt)
+                    redacted_stmt, _ = redact_pii(stmt, detected_types)
+                    redacted_doctor_statements.append(redacted_stmt)
+                conversation_summary.append(f"Doctor: {'; '.join(redacted_doctor_statements)}")
             
             if conversation_summary:
                 extracted_info.append({
