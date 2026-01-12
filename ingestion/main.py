@@ -12,6 +12,7 @@ from asr.transcribe import transcribe_audio
 from asr.diarize import assign_speakers
 from fastapi import Response
 import logging
+from rag_system import RAGSystem
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
@@ -29,6 +30,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 初始化RAG系统
+rag_system = RAGSystem()
 
 # ---------- 数据模型（统一 payload） ----------
 
@@ -117,9 +121,16 @@ async def upload_audio(file: UploadFile = File(...)):
         logger.info("Assigning speakers...")
         transcript = assign_speakers(segments)
         
-        # 3. PII 检测和脱敏
-        logger.info("Starting PII detection and redaction...")
+        # 3. 合并完整转录文本用于RAG处理
         full_text = " ".join([seg["text"] for seg in transcript])
+        logger.info(f"Full transcript: {full_text[:200]}...")
+        
+        # 4. RAG系统处理 - 患者识别和医疗记录检索
+        logger.info("Starting RAG processing...")
+        rag_result = rag_system.process_conversation(full_text)
+        
+        # 5. PII 检测和脱敏
+        logger.info("Starting PII detection and redaction...")
         detected_types = ner_detect_pii(full_text)
         logger.info(f"Detected PII types: {detected_types}")
         
@@ -138,15 +149,27 @@ async def upload_audio(file: UploadFile = File(...)):
             })
             all_redacted_entities.update(entities)
 
-        logger.info(f"Processing complete. Redacted entities: {list(all_redacted_entities)}")
+        logger.info(f"Processing complete. Patient identified: {rag_result['patient_identified']}")
         
-        return {
+        # 6. 构建响应
+        response = {
             "transcript": redacted_transcript,
             "redaction_summary": list(all_redacted_entities),
             "detected_entity_types": detected_types,
-            "processing_note": "Phase 1: Audio transcription with speaker identification and PII redaction",
-            "segments_count": len(segments)
+            "processing_note": "Phase 1: Audio transcription with speaker identification, PII redaction, and medical record retrieval",
+            "segments_count": len(segments),
+            # RAG结果
+            "patient_identified": rag_result["patient_identified"],
+            "patient_id": rag_result["patient_id"],
+            "medical_records": rag_result["medical_records"],
+            "extracted_patient_info": rag_result["extracted_info"]
         }
+        
+        # 如果有RAG错误，添加到响应中
+        if rag_result.get("error"):
+            response["rag_error"] = rag_result["error"]
+        
+        return response
         
     except Exception as e:
         logger.error(f"Error processing audio: {str(e)}")
@@ -158,10 +181,44 @@ async def upload_audio(file: UploadFile = File(...)):
             logger.info(f"Cleaned up temporary file: {tmp_path}")
         except Exception as e:
             logger.warning(f"Failed to clean up temporary file: {e}")
+
+
+@app.get("/patient/{patient_id}/records")
+async def get_patient_records(patient_id: str):
+    """获取特定患者的医疗记录"""
+    try:
+        records = rag_system.retrieve_medical_context(patient_id)
+        return {
+            "patient_id": patient_id,
+            "records": records,
+            "count": len(records)
+        }
+    except Exception as e:
+        logger.error(f"Error retrieving patient records: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/initialize-sample-data")
+async def initialize_sample_data():
+    """初始化示例数据（仅用于演示）"""
+    try:
+        from database import init_sample_data
+        init_sample_data()
+        return {"message": "Sample data initialized successfully"}
+    except Exception as e:
+        logger.error(f"Error initializing sample data: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
     
 @app.on_event("startup")
 def startup_event():
     print("FastAPI started. Ready to accept requests.")
+    # 自动初始化示例数据
+    try:
+        from database import init_sample_data
+        init_sample_data()
+        logger.info("Sample data initialized on startup")
+    except Exception as e:
+        logger.warning(f"Failed to initialize sample data: {e}")
 
 @app.options("/upload-audio")
 def options_upload_audio():

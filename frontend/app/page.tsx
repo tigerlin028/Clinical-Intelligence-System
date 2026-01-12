@@ -7,10 +7,25 @@ interface TranscriptSegment {
   text: string;
 }
 
+interface MedicalRecord {
+  type: string;
+  content: string;
+  date: string;
+  metadata?: any;
+}
+
 interface ProcessingResult {
   transcript: TranscriptSegment[];
   redaction_summary?: string[];
   detected_entity_types?: string[];
+  processing_note?: string;
+  segments_count?: number;
+  // RAG系统相关字段
+  patient_identified?: boolean;
+  patient_id?: string;
+  medical_records?: MedicalRecord[];
+  extracted_patient_info?: Record<string, string>;
+  rag_error?: string;
 }
 
 export default function AudioUploadDemo() {
@@ -101,6 +116,50 @@ export default function AudioUploadDemo() {
               </div>
             </div>
 
+            {/* Patient Identification Status */}
+            {result.patient_identified ? (
+              <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
+                <div className="text-blue-800">
+                  <strong>✓ Patient Identified:</strong> {result.patient_id}
+                  {result.extracted_patient_info && Object.keys(result.extracted_patient_info).length > 0 && (
+                    <div className="mt-2 text-sm">
+                      <strong>Extracted Info:</strong> {Object.entries(result.extracted_patient_info).map(([key, value]) => `${key}: ${value}`).join(", ")}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
+                <div className="text-yellow-800">
+                  <strong>⚠ Patient Not Identified:</strong> {result.rag_error || "Unable to match patient information"}
+                </div>
+              </div>
+            )}
+
+            {/* Medical Records */}
+            {result.medical_records && result.medical_records.length > 0 && (
+              <div>
+                <h2 className="text-lg font-semibold text-gray-800 mb-4">
+                  Medical Records ({result.patient_id})
+                </h2>
+                <div className="space-y-3">
+                  {result.medical_records.map((record, i) => (
+                    <div key={i} className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                      <div className="flex justify-between items-start mb-2">
+                        <span className="inline-block px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+                          {record.type}
+                        </span>
+                        <span className="text-sm text-gray-500">
+                          {new Date(record.date).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <p className="text-gray-700">{record.content}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Transcript */}
             <div>
               <h2 className="text-lg font-semibold text-gray-800 mb-4">
@@ -128,6 +187,8 @@ export default function AudioUploadDemo() {
                 <summary className="cursor-pointer font-medium">Technical Details</summary>
                 <div className="mt-2 pl-4">
                   <p>Semantic PII Detection: {result.detected_entity_types.join(", ")}</p>
+                  <p>Processing: {result.processing_note}</p>
+                  {result.segments_count && <p>Audio Segments: {result.segments_count}</p>}
                 </div>
               </details>
             )}
