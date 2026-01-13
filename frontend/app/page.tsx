@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { API_URL } from "../lib/config";
+import DemoData from "../components/DemoData";
 
 interface TranscriptSegment {
   speaker: string;
@@ -33,11 +34,14 @@ export default function AudioUploadDemo() {
   const [result, setResult] = useState<ProcessingResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [dragActive, setDragActive] = useState(false);
+  const [isDemoMode, setIsDemoMode] = useState(false);
 
   const uploadAudio = async (file: File) => {
     setLoading(true);
     setError(null);
     setResult(null);
+    setIsDemoMode(false);
 
     try {
       const formData = new FormData();
@@ -64,153 +68,358 @@ export default function AudioUploadDemo() {
     }
   };
 
+  const handleDemoLoad = (demoData: ProcessingResult) => {
+    setResult(demoData);
+    setIsDemoMode(true);
+    setError(null);
+  };
+
+  const handleDrag = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActive(true);
+    } else if (e.type === "dragleave") {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      uploadAudio(e.dataTransfer.files[0]);
+    }
+  };
+
   return (
-    <div className="max-w-4xl mx-auto p-6">
-      <div className="bg-white rounded-lg shadow-lg p-6">
-        <h1 className="text-2xl font-bold text-gray-800 mb-6">
-          Clinical Intelligence System - Phase 1 Demo
-        </h1>
-        
-        <div className="mb-6">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Upload Audio File
-          </label>
-          <input
-            type="file"
-            accept="audio/*"
-            onChange={(e) => {
-              if (e.target.files?.[0]) {
-                uploadAudio(e.target.files[0]);
-              }
-            }}
-            className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-            disabled={loading}
-          />
-        </div>
-
-        {loading && (
-          <div className="flex items-center justify-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            <span className="ml-3 text-gray-600">Processing audio with PII redaction...</span>
-          </div>
-        )}
-
-        {error && (
-          <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-6">
-            <div className="text-red-800">
-              <strong>Error:</strong> {error}
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+      {/* Header */}
+      <div className="medical-gradient text-white py-8">
+        <div className="max-w-6xl mx-auto px-6">
+          <div className="flex items-center space-x-4">
+            <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center">
+              <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+            </div>
+            <div>
+              <h1 className="text-3xl font-bold">Clinical Intelligence System</h1>
+              <p className="text-blue-100 mt-1">AI-Powered Ambient Intelligence for Medical Consultations</p>
             </div>
           </div>
-        )}
+        </div>
+      </div>
 
-        {result && (
-          <div className="space-y-6">
-            {/* Privacy Notice */}
-            <div className="bg-green-50 border border-green-200 rounded-md p-4">
-              <div className="text-green-800">
-                <strong>✓ Privacy Protected:</strong> All sensitive information has been automatically redacted
-                {result.redaction_summary && result.redaction_summary.length > 0 && (
-                  <span className="ml-2">
-                    (Detected: {result.redaction_summary.join(", ")})
-                  </span>
+      <div className="max-w-6xl mx-auto px-6 py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          
+          {/* Upload Section */}
+          <div className="lg:col-span-1">
+            <div className="bg-white rounded-xl card-shadow-lg p-6 sticky top-8">
+              <h2 className="text-xl font-semibold text-gray-800 mb-4 flex items-center">
+                <svg className="w-5 h-5 mr-2 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z"/>
+                </svg>
+                Audio Upload
+              </h2>
+
+              {/* Demo Data Section */}
+              <DemoData onLoadDemo={handleDemoLoad} />
+              
+              <div
+                className={`border-2 border-dashed rounded-lg p-8 text-center transition-all duration-200 ${
+                  dragActive 
+                    ? 'border-blue-400 bg-blue-50' 
+                    : 'border-gray-300 hover:border-blue-400 hover:bg-gray-50'
+                } ${loading ? 'opacity-50 pointer-events-none' : ''}`}
+                onDragEnter={handleDrag}
+                onDragLeave={handleDrag}
+                onDragOver={handleDrag}
+                onDrop={handleDrop}
+              >
+                <svg className="mx-auto h-12 w-12 text-gray-400 mb-4" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                  <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                <p className="text-gray-600 mb-2">
+                  {dragActive ? 'Drop your audio file here' : 'Drag & drop your audio file here'}
+                </p>
+                <p className="text-sm text-gray-500 mb-4">or</p>
+                <input
+                  type="file"
+                  accept="audio/*"
+                  onChange={(e) => {
+                    if (e.target.files?.[0]) {
+                      uploadAudio(e.target.files[0]);
+                    }
+                  }}
+                  className="hidden"
+                  id="audio-upload"
+                  disabled={loading}
+                />
+                <label
+                  htmlFor="audio-upload"
+                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 cursor-pointer transition-colors"
+                >
+                  Choose File
+                </label>
+              </div>
+
+              {/* Processing Status */}
+              {loading && (
+                <div className="mt-6 animate-fade-in">
+                  <div className="flex items-center justify-center py-4">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                    <span className="ml-3 text-gray-600 text-sm">Processing audio...</span>
+                  </div>
+                  <div className="bg-blue-50 rounded-lg p-4 mt-4">
+                    <div className="text-sm text-blue-800">
+                      <div className="flex items-center mb-2">
+                        <div className="animate-pulse-slow w-2 h-2 bg-blue-600 rounded-full mr-2"></div>
+                        Transcribing speech to text
+                      </div>
+                      <div className="flex items-center mb-2">
+                        <div className="animate-pulse-slow w-2 h-2 bg-blue-600 rounded-full mr-2" style={{animationDelay: '0.5s'}}></div>
+                        Identifying speakers
+                      </div>
+                      <div className="flex items-center mb-2">
+                        <div className="animate-pulse-slow w-2 h-2 bg-blue-600 rounded-full mr-2" style={{animationDelay: '1s'}}></div>
+                        Redacting sensitive information
+                      </div>
+                      <div className="flex items-center">
+                        <div className="animate-pulse-slow w-2 h-2 bg-blue-600 rounded-full mr-2" style={{animationDelay: '1.5s'}}></div>
+                        Retrieving medical records
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Features List */}
+              <div className="mt-8 space-y-3">
+                <h3 className="font-medium text-gray-800">Features</h3>
+                <div className="space-y-2 text-sm text-gray-600">
+                  <div className="flex items-center">
+                    <svg className="w-4 h-4 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/>
+                    </svg>
+                    Real-time transcription
+                  </div>
+                  <div className="flex items-center">
+                    <svg className="w-4 h-4 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/>
+                    </svg>
+                    Speaker identification
+                  </div>
+                  <div className="flex items-center">
+                    <svg className="w-4 h-4 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/>
+                    </svg>
+                    PII/PHI protection
+                  </div>
+                  <div className="flex items-center">
+                    <svg className="w-4 h-4 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/>
+                    </svg>
+                    Medical record retrieval
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Results Section */}
+          <div className="lg:col-span-2">
+            {/* Demo Mode Banner */}
+            {isDemoMode && result && (
+              <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 mb-6 animate-fade-in">
+                <div className="flex items-center">
+                  <svg className="w-5 h-5 text-purple-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                  </svg>
+                  <div>
+                    <div className="font-medium text-purple-800">Demo Mode Active</div>
+                    <div className="text-sm text-purple-600">You're viewing sample data to showcase system capabilities</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {error && (
+              <div className="bg-red-50 border border-red-200 rounded-xl p-6 mb-6 animate-fade-in">
+                <div className="flex items-center">
+                  <svg className="w-5 h-5 text-red-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd"/>
+                  </svg>
+                  <div>
+                    <strong className="text-red-800">Error:</strong>
+                    <span className="text-red-700 ml-1">{error}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {result && (
+              <div className="space-y-6 animate-fade-in">
+                {/* Status Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Privacy Status */}
+                  <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+                    <div className="flex items-center">
+                      <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center mr-3">
+                        <svg className="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"/>
+                        </svg>
+                      </div>
+                      <div>
+                        <div className="font-medium text-green-800">Privacy Protected</div>
+                        <div className="text-sm text-green-600">
+                          {result.redaction_summary && result.redaction_summary.length > 0 
+                            ? `Redacted: ${result.redaction_summary.join(", ")}`
+                            : "All sensitive data secured"
+                          }
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Patient Status */}
+                  <div className={`${result.patient_identified ? 'bg-blue-50 border-blue-200' : 'bg-yellow-50 border-yellow-200'} border rounded-xl p-4`}>
+                    <div className="flex items-center">
+                      <div className={`w-8 h-8 ${result.patient_identified ? 'bg-blue-100' : 'bg-yellow-100'} rounded-full flex items-center justify-center mr-3`}>
+                        <svg className={`w-4 h-4 ${result.patient_identified ? 'text-blue-600' : 'text-yellow-600'}`} fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd"/>
+                        </svg>
+                      </div>
+                      <div>
+                        <div className={`font-medium ${result.patient_identified ? 'text-blue-800' : 'text-yellow-800'}`}>
+                          {result.patient_identified ? 'Patient Identified' : 'Patient Not Found'}
+                        </div>
+                        <div className={`text-sm ${result.patient_identified ? 'text-blue-600' : 'text-yellow-600'}`}>
+                          {result.patient_identified ? result.patient_id : 'Unable to match records'}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Medical Records */}
+                {result.medical_records && result.medical_records.length > 0 && (
+                  <div className="bg-white rounded-xl card-shadow p-6">
+                    <h2 className="text-xl font-semibold text-gray-800 mb-4 flex items-center">
+                      <svg className="w-5 h-5 mr-2 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M4 4a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2H4zm0 2h12v8H4V6z"/>
+                      </svg>
+                      Medical Records ({result.patient_id})
+                    </h2>
+                    <div className="grid gap-4">
+                      {result.medical_records.map((record, i) => (
+                        <div key={i} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                          <div className="flex justify-between items-start mb-3">
+                            <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+                              {record.type}
+                            </span>
+                            <span className="text-sm text-gray-500">
+                              {new Date(record.date).toLocaleDateString()}
+                            </span>
+                          </div>
+                          <p className="text-gray-700 leading-relaxed">{record.content}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* New Medical Information */}
+                {result.new_medical_info && result.new_medical_info.length > 0 && (
+                  <div className="bg-white rounded-xl card-shadow p-6">
+                    <h2 className="text-xl font-semibold text-gray-800 mb-4 flex items-center">
+                      <svg className="w-5 h-5 mr-2 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd"/>
+                      </svg>
+                      New Medical Information Extracted
+                    </h2>
+                    <div className="space-y-3">
+                      {result.new_medical_info.map((info, i) => (
+                        <div key={i} className="bg-green-50 border border-green-200 rounded-lg p-4">
+                          <div className="flex items-start">
+                            <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-800 mr-3">
+                              {info.type}
+                            </span>
+                            <p className="text-gray-700 flex-1">{info.content}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Transcript */}
+                <div className="bg-white rounded-xl card-shadow p-6">
+                  <h2 className="text-xl font-semibold text-gray-800 mb-4 flex items-center">
+                    <svg className="w-5 h-5 mr-2 text-purple-600" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z" clipRule="evenodd"/>
+                    </svg>
+                    Conversation Transcript
+                  </h2>
+                  <div className="space-y-4 max-h-96 overflow-y-auto">
+                    {result.transcript.map((seg, i) => (
+                      <div key={i} className="flex items-start space-x-3">
+                        <div className={`flex-shrink-0 w-20 text-center py-2 px-3 rounded-lg text-sm font-medium ${
+                          seg.speaker === 'Doctor' 
+                            ? 'bg-blue-100 text-blue-800' 
+                            : 'bg-green-100 text-green-800'
+                        }`}>
+                          {seg.speaker}
+                        </div>
+                        <div className="flex-1 bg-gray-50 rounded-lg p-3">
+                          <p className="text-gray-700 leading-relaxed">{seg.text}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Technical Details */}
+                {result.detected_entity_types && result.detected_entity_types.length > 0 && (
+                  <details className="bg-gray-50 rounded-xl p-4">
+                    <summary className="cursor-pointer font-medium text-gray-700 hover:text-gray-900">
+                      Technical Processing Details
+                    </summary>
+                    <div className="mt-4 text-sm text-gray-600 space-y-2">
+                      <div className="flex justify-between">
+                        <span>PII Detection:</span>
+                        <span className="font-mono">{result.detected_entity_types.join(", ")}</span>
+                      </div>
+                      {result.segments_count && (
+                        <div className="flex justify-between">
+                          <span>Audio Segments:</span>
+                          <span className="font-mono">{result.segments_count}</span>
+                        </div>
+                      )}
+                      <div className="text-xs text-gray-500 mt-2">
+                        {result.processing_note}
+                      </div>
+                    </div>
+                  </details>
                 )}
               </div>
-            </div>
-
-            {/* Patient Identification Status */}
-            {result.patient_identified ? (
-              <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
-                <div className="text-blue-800">
-                  <strong>✓ Patient Identified:</strong> {result.patient_id}
-                  {result.extracted_patient_info && Object.keys(result.extracted_patient_info).length > 0 && (
-                    <div className="mt-2 text-sm">
-                      <strong>Extracted Info:</strong> {Object.entries(result.extracted_patient_info).map(([key, value]) => `${key}: ${value}`).join(", ")}
-                    </div>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
-                <div className="text-yellow-800">
-                  <strong>⚠ Patient Not Identified:</strong> {result.rag_error || "Unable to match patient information"}
-                </div>
-              </div>
             )}
 
-            {/* New Medical Information Extracted */}
-            {result.new_medical_info && result.new_medical_info.length > 0 && (
-              <div className="bg-green-50 border border-green-200 rounded-md p-4">
-                <div className="text-green-800">
-                  <strong>✓ New Medical Information Extracted:</strong>
-                  <ul className="mt-2 list-disc list-inside">
-                    {result.new_medical_info.map((info, i) => (
-                      <li key={i} className="text-sm">
-                        <strong>{info.type}:</strong> {info.content}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+            {/* Empty State */}
+            {!result && !loading && !error && (
+              <div className="bg-white rounded-xl card-shadow p-12 text-center">
+                <svg className="mx-auto h-16 w-16 text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/>
+                </svg>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">Ready to Process Audio</h3>
+                <p className="text-gray-500">Upload an audio file or try our demo data to see AI-powered transcription, speaker identification, and medical record integration in action.</p>
               </div>
-            )}
-
-            {/* Medical Records */}
-            {result.medical_records && result.medical_records.length > 0 && (
-              <div>
-                <h2 className="text-lg font-semibold text-gray-800 mb-4">
-                  Medical Records ({result.patient_id})
-                </h2>
-                <div className="space-y-3">
-                  {result.medical_records.map((record, i) => (
-                    <div key={i} className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                      <div className="flex justify-between items-start mb-2">
-                        <span className="inline-block px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
-                          {record.type}
-                        </span>
-                        <span className="text-sm text-gray-500">
-                          {new Date(record.date).toLocaleDateString()}
-                        </span>
-                      </div>
-                      <p className="text-gray-700">{record.content}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Transcript */}
-            <div>
-              <h2 className="text-lg font-semibold text-gray-800 mb-4">
-                Transcript with Speaker Identification
-              </h2>
-              <div className="bg-gray-50 rounded-lg p-4 space-y-3">
-                {result.transcript.map((seg, i) => (
-                  <div key={i} className="flex">
-                    <span className={`inline-block px-3 py-1 rounded-full text-sm font-medium mr-3 ${
-                      seg.speaker === 'Doctor' 
-                        ? 'bg-blue-100 text-blue-800' 
-                        : 'bg-green-100 text-green-800'
-                    }`}>
-                      {seg.speaker}
-                    </span>
-                    <span className="text-gray-700 flex-1">{seg.text}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Technical Details */}
-            {result.detected_entity_types && result.detected_entity_types.length > 0 && (
-              <details className="text-sm text-gray-600">
-                <summary className="cursor-pointer font-medium">Technical Details</summary>
-                <div className="mt-2 pl-4">
-                  <p>Semantic PII Detection: {result.detected_entity_types.join(", ")}</p>
-                  <p>Processing: {result.processing_note}</p>
-                  {result.segments_count && <p>Audio Segments: {result.segments_count}</p>}
-                </div>
-              </details>
             )}
           </div>
-        )}
+        </div>
       </div>
     </div>
   );
