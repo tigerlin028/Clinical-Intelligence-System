@@ -1,7 +1,6 @@
 "use client";
 import { useState } from "react";
 import { API_URL } from "../lib/config";
-import DemoData from "../components/DemoData";
 
 interface TranscriptSegment {
   speaker: string;
@@ -35,13 +34,11 @@ export default function AudioUploadDemo() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
-  const [isDemoMode, setIsDemoMode] = useState(false);
 
   const uploadAudio = async (file: File) => {
     setLoading(true);
     setError(null);
     setResult(null);
-    setIsDemoMode(false);
 
     try {
       const formData = new FormData();
@@ -66,12 +63,6 @@ export default function AudioUploadDemo() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleDemoLoad = (demoData: ProcessingResult) => {
-    setResult(demoData);
-    setIsDemoMode(true);
-    setError(null);
   };
 
   const handleDrag = (e: React.DragEvent) => {
@@ -125,9 +116,6 @@ export default function AudioUploadDemo() {
                 </svg>
                 Audio Upload
               </h2>
-
-              {/* Demo Data Section */}
-              <DemoData onLoadDemo={handleDemoLoad} />
               
               <div
                 className={`border-2 border-dashed rounded-lg p-8 text-center transition-all duration-200 ${
@@ -232,21 +220,6 @@ export default function AudioUploadDemo() {
 
           {/* Results Section */}
           <div className="lg:col-span-2">
-            {/* Demo Mode Banner */}
-            {isDemoMode && result && (
-              <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 mb-6 animate-fade-in">
-                <div className="flex items-center">
-                  <svg className="w-5 h-5 text-purple-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
-                  </svg>
-                  <div>
-                    <div className="font-medium text-purple-800">Demo Mode Active</div>
-                    <div className="text-sm text-purple-600">You're viewing sample data to showcase system capabilities</div>
-                  </div>
-                </div>
-              </div>
-            )}
-
             {error && (
               <div className="bg-red-50 border border-red-200 rounded-xl p-6 mb-6 animate-fade-in">
                 <div className="flex items-center">
@@ -415,7 +388,7 @@ export default function AudioUploadDemo() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/>
                 </svg>
                 <h3 className="text-lg font-medium text-gray-900 mb-2">Ready to Process Audio</h3>
-                <p className="text-gray-500">Upload an audio file or try our demo data to see AI-powered transcription, speaker identification, and medical record integration in action.</p>
+                <p className="text-gray-500">Upload an audio file to see AI-powered transcription, speaker identification, and medical record integration in action.</p>
               </div>
             )}
           </div>
