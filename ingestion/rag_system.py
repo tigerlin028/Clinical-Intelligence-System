@@ -112,6 +112,10 @@ class RAGSystem:
         
         return records
     
+    def delete_medical_record(self, record_id: int) -> bool:
+        """删除特定的医疗记录"""
+        return self.medical_db.delete_medical_record(record_id)
+    
     def process_conversation(self, transcript: str) -> Dict:
         """处理完整的对话流程"""
         result = {

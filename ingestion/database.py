@@ -178,7 +178,7 @@ class MedicalRecordsDatabase:
         cursor = conn.cursor()
         
         cursor.execute('''
-            SELECT record_type, content, date_recorded, metadata
+            SELECT id, record_type, content, date_recorded, metadata
             FROM medical_records
             WHERE patient_id = ?
             ORDER BY date_recorded DESC
@@ -187,14 +187,36 @@ class MedicalRecordsDatabase:
         records = []
         for row in cursor.fetchall():
             records.append({
-                'type': row[0],
-                'content': row[1],
-                'date': row[2],
-                'metadata': json.loads(row[3]) if row[3] else {}
+                'id': row[0],  # 添加记录ID
+                'type': row[1],
+                'content': row[2],
+                'date': row[3],
+                'metadata': json.loads(row[4]) if row[4] else {}
             })
         
         conn.close()
         return records
+    
+    def delete_medical_record(self, record_id: int) -> bool:
+        """删除特定的医疗记录"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        # 检查记录是否存在
+        cursor.execute('SELECT id FROM medical_records WHERE id = ?', (record_id,))
+        if cursor.fetchone() is None:
+            conn.close()
+            return False
+        
+        # 删除记录
+        cursor.execute('DELETE FROM medical_records WHERE id = ?', (record_id,))
+        conn.commit()
+        
+        deleted_rows = cursor.rowcount
+        conn.close()
+        
+        print(f"Deleted medical record with ID: {record_id}")
+        return deleted_rows > 0
     
     def add_conversation(self, patient_id: str, transcript: str, summary: str = None):
         """添加对话记录到medical_records数据库"""

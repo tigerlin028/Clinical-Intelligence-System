@@ -198,6 +198,20 @@ async def get_patient_records(patient_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.delete("/medical-record/{record_id}")
+async def delete_medical_record(record_id: int):
+    """删除特定的医疗记录"""
+    try:
+        success = rag_system.delete_medical_record(record_id)
+        if success:
+            return {"message": "Medical record deleted successfully", "record_id": record_id}
+        else:
+            raise HTTPException(status_code=404, detail="Medical record not found")
+    except Exception as e:
+        logger.error(f"Error deleting medical record: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/initialize-sample-data")
 async def initialize_sample_data():
     """初始化示例数据（仅用于演示）"""

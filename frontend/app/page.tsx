@@ -8,6 +8,7 @@ interface TranscriptSegment {
 }
 
 interface MedicalRecord {
+  id?: number;  // 添加ID字段
   type: string;
   content: string;
   date: string;
@@ -34,6 +35,12 @@ export default function AudioUploadDemo() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<{show: boolean; recordId: number | null; recordContent: string}>({
+    show: false,
+    recordId: null,
+    recordContent: ''
+  });
+  const [deleting, setDeleting] = useState(false);
 
   const uploadAudio = async (file: File) => {
     setLoading(true);
@@ -63,6 +70,48 @@ export default function AudioUploadDemo() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleDeleteRecord = (recordId: number, recordContent: string) => {
+    setDeleteConfirm({
+      show: true,
+      recordId,
+      recordContent
+    });
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteConfirm.recordId) return;
+
+    setDeleting(true);
+    try {
+      const res = await fetch(`${API_URL}/medical-record/${deleteConfirm.recordId}`, {
+        method: 'DELETE',
+      });
+
+      if (!res.ok) {
+        throw new Error('Failed to delete record');
+      }
+
+      // 从当前结果中移除已删除的记录
+      if (result && result.medical_records) {
+        const updatedRecords = result.medical_records.filter(record => record.id !== deleteConfirm.recordId);
+        setResult({
+          ...result,
+          medical_records: updatedRecords
+        });
+      }
+
+      setDeleteConfirm({ show: false, recordId: null, recordContent: '' });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete record");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const cancelDelete = () => {
+    setDeleteConfirm({ show: false, recordId: null, recordContent: '' });
   };
 
   const handleDrag = (e: React.DragEvent) => {
@@ -289,14 +338,27 @@ export default function AudioUploadDemo() {
                     </h2>
                     <div className="grid gap-4">
                       {result.medical_records.map((record, i) => (
-                        <div key={i} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                        <div key={i} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow group">
                           <div className="flex justify-between items-start mb-3">
                             <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
                               {record.type}
                             </span>
-                            <span className="text-sm text-gray-500">
-                              {new Date(record.date).toLocaleDateString()}
-                            </span>
+                            <div className="flex items-center space-x-2">
+                              <span className="text-sm text-gray-500">
+                                {new Date(record.date).toLocaleDateString()}
+                              </span>
+                              {record.id && (
+                                <button
+                                  onClick={() => handleDeleteRecord(record.id!, record.content)}
+                                  className="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
+                                  title="Delete this record"
+                                >
+                                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd"/>
+                                  </svg>
+                                </button>
+                              )}
+                            </div>
                           </div>
                           <p className="text-gray-700 leading-relaxed">{record.content}</p>
                         </div>
@@ -394,6 +456,56 @@ export default function AudioUploadDemo() {
           </div>
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirm.show && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4 animate-fade-in">
+            <div className="flex items-center mb-4">
+              <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center mr-3">
+                <svg className="w-5 h-5 text-red-600" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd"/>
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Delete Medical Record</h3>
+                <p className="text-sm text-gray-600">This action cannot be undone</p>
+              </div>
+            </div>
+            
+            <div className="mb-4">
+              <p className="text-sm text-gray-700 mb-2">Are you sure you want to delete this record?</p>
+              <div className="bg-gray-50 rounded-lg p-3 max-h-32 overflow-y-auto">
+                <p className="text-sm text-gray-600 italic">"{deleteConfirm.recordContent}"</p>
+              </div>
+            </div>
+
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={cancelDelete}
+                disabled={deleting}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDelete}
+                disabled={deleting}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors disabled:opacity-50 flex items-center"
+              >
+                {deleting ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Deleting...
+                  </>
+                ) : (
+                  'Delete Record'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
